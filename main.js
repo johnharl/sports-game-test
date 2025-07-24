@@ -20,39 +20,146 @@ const rinkWidth = 30;
 const rinkHeight = 15;
 const boardHeight = 1;
 
-// Loading Manager
-const loadingManager = new THREE.LoadingManager();
-const textureLoader = new THREE.TextureLoader(loadingManager);
-
-loadingManager.onLoad = () => {
-    console.log("All assets loaded, starting animation.");
-    animate(); // Start the animation loop only after loading is complete
-};
-
-loadingManager.onError = (url) => {
-    console.error(`There was an error loading ${url}`);
-    // As a fallback, create a simple blue rink if the texture fails
-    const rinkMaterial = new THREE.MeshStandardMaterial({ color: 0xd1e7ff });
-    rink.material = rinkMaterial;
-    animate();
-};
+// Create programmatic hockey rink texture
+function createRinkTexture() {
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    
+    // High resolution canvas for crisp lines
+    const canvasWidth = 1024;
+    const canvasHeight = 512;
+    canvas.width = canvasWidth;
+    canvas.height = canvasHeight;
+    
+    // Scale factors to map rink dimensions to canvas
+    const scaleX = canvasWidth / rinkWidth;
+    const scaleY = canvasHeight / rinkHeight;
+    
+    // Fill with ice color (light blue-white)
+    ctx.fillStyle = '#f0f8ff';
+    ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+    
+    // Set line properties
+    ctx.strokeStyle = '#ff0000'; // Red for center line
+    ctx.lineWidth = 3;
+    
+    // Center red line
+    ctx.beginPath();
+    ctx.moveTo(canvasWidth / 2, 0);
+    ctx.lineTo(canvasWidth / 2, canvasHeight);
+    ctx.stroke();
+    
+    // Blue lines (1/3 from each end)
+    ctx.strokeStyle = '#0000ff';
+    ctx.lineWidth = 2;
+    
+    // Left blue line
+    ctx.beginPath();
+    ctx.moveTo(canvasWidth / 3, 0);
+    ctx.lineTo(canvasWidth / 3, canvasHeight);
+    ctx.stroke();
+    
+    // Right blue line
+    ctx.beginPath();
+    ctx.moveTo((2 * canvasWidth) / 3, 0);
+    ctx.lineTo((2 * canvasWidth) / 3, canvasHeight);
+    ctx.stroke();
+    
+    // Goal lines (near each end)
+    ctx.strokeStyle = '#ff0000';
+    ctx.lineWidth = 2;
+    
+    // Left goal line
+    const goalLineOffset = canvasWidth * 0.1;
+    ctx.beginPath();
+    ctx.moveTo(goalLineOffset, 0);
+    ctx.lineTo(goalLineOffset, canvasHeight);
+    ctx.stroke();
+    
+    // Right goal line
+    ctx.beginPath();
+    ctx.moveTo(canvasWidth - goalLineOffset, 0);
+    ctx.lineTo(canvasWidth - goalLineOffset, canvasHeight);
+    ctx.stroke();
+    
+    // Center ice circle
+    ctx.strokeStyle = '#0000ff';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(canvasWidth / 2, canvasHeight / 2, 60, 0, 2 * Math.PI);
+    ctx.stroke();
+    
+    // Center face-off dot
+    ctx.fillStyle = '#0000ff';
+    ctx.beginPath();
+    ctx.arc(canvasWidth / 2, canvasHeight / 2, 8, 0, 2 * Math.PI);
+    ctx.fill();
+    
+    // Face-off circles in each zone
+    const faceOffRadius = 40;
+    const faceOffY1 = canvasHeight * 0.25;
+    const faceOffY2 = canvasHeight * 0.75;
+    
+    // Left zone face-off circles
+    ctx.strokeStyle = '#ff0000';
+    ctx.beginPath();
+    ctx.arc(canvasWidth / 6, faceOffY1, faceOffRadius, 0, 2 * Math.PI);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(canvasWidth / 6, faceOffY2, faceOffRadius, 0, 2 * Math.PI);
+    ctx.stroke();
+    
+    // Right zone face-off circles
+    ctx.beginPath();
+    ctx.arc((5 * canvasWidth) / 6, faceOffY1, faceOffRadius, 0, 2 * Math.PI);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc((5 * canvasWidth) / 6, faceOffY2, faceOffRadius, 0, 2 * Math.PI);
+    ctx.stroke();
+    
+    // Face-off dots
+    ctx.fillStyle = '#ff0000';
+    const dotRadius = 6;
+    ctx.beginPath();
+    ctx.arc(canvasWidth / 6, faceOffY1, dotRadius, 0, 2 * Math.PI);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(canvasWidth / 6, faceOffY2, dotRadius, 0, 2 * Math.PI);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc((5 * canvasWidth) / 6, faceOffY1, dotRadius, 0, 2 * Math.PI);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc((5 * canvasWidth) / 6, faceOffY2, dotRadius, 0, 2 * Math.PI);
+    ctx.fill();
+    
+    // Goal creases (simplified semi-circles)
+    ctx.strokeStyle = '#0000ff';
+    ctx.lineWidth = 2;
+    
+    // Left goal crease
+    ctx.beginPath();
+    ctx.arc(goalLineOffset, canvasHeight / 2, 25, -Math.PI / 2, Math.PI / 2);
+    ctx.stroke();
+    
+    // Right goal crease
+    ctx.beginPath();
+    ctx.arc(canvasWidth - goalLineOffset, canvasHeight / 2, 25, Math.PI / 2, 3 * Math.PI / 2);
+    ctx.stroke();
+    
+    return new THREE.CanvasTexture(canvas);
+}
 
 // Ice Rink (Ground Plane)
-const rinkTexture = textureLoader.load(
-    'https://i.imgur.com/52y3b5v.png', // New, hopefully more reliable texture
-);
 const rinkGeometry = new THREE.PlaneGeometry(rinkWidth, rinkHeight);
-// Start with a basic material, the texture will be applied once loaded
-const rinkMaterial = new THREE.MeshStandardMaterial({ color: 0xffffff }); 
+const rinkTexture = createRinkTexture();
+const rinkMaterial = new THREE.MeshStandardMaterial({ 
+    map: rinkTexture,
+    transparent: false
+});
 const rink = new THREE.Mesh(rinkGeometry, rinkMaterial);
 rink.rotation.x = -Math.PI / 2;
 scene.add(rink);
-
-// Apply texture to the material once it's loaded
-rinkTexture.wrapS = THREE.RepeatWrapping;
-rinkTexture.wrapT = THREE.RepeatWrapping;
-rinkMaterial.map = rinkTexture;
-rinkMaterial.needsUpdate = true;
 
 
 // Sideboards
@@ -72,6 +179,74 @@ const board4 = new THREE.Mesh(board3Geo, boardMaterial);
 board4.position.set(rinkWidth / 2, boardHeight / 2, 0);
 scene.add(board4);
 
+// Goals
+const goalWidth = 4;
+const goalHeight = 1.2;
+const goalDepth = 1.5;
+const goalPostRadius = 0.1;
+
+// Goal posts material
+const goalPostMaterial = new THREE.MeshStandardMaterial({ color: 0xff0000 });
+
+// Left Goal (Player 1's goal to defend)
+const leftGoalGroup = new THREE.Group();
+
+// Left goal posts
+const goalPostGeometry = new THREE.CylinderGeometry(goalPostRadius, goalPostRadius, goalHeight, 8);
+const leftGoalPost1 = new THREE.Mesh(goalPostGeometry, goalPostMaterial);
+leftGoalPost1.position.set(-rinkWidth/2 + goalDepth/2, goalHeight/2, -goalWidth/2);
+leftGoalGroup.add(leftGoalPost1);
+
+const leftGoalPost2 = new THREE.Mesh(goalPostGeometry, goalPostMaterial);
+leftGoalPost2.position.set(-rinkWidth/2 + goalDepth/2, goalHeight/2, goalWidth/2);
+leftGoalGroup.add(leftGoalPost2);
+
+// Left goal crossbar
+const crossbarGeometry = new THREE.CylinderGeometry(goalPostRadius, goalPostRadius, goalWidth, 8);
+const leftCrossbar = new THREE.Mesh(crossbarGeometry, goalPostMaterial);
+leftCrossbar.position.set(-rinkWidth/2 + goalDepth/2, goalHeight, 0);
+leftCrossbar.rotation.z = Math.PI / 2;
+leftGoalGroup.add(leftCrossbar);
+
+// Left goal net (simplified as a semi-transparent plane)
+const netGeometry = new THREE.PlaneGeometry(goalWidth, goalHeight);
+const netMaterial = new THREE.MeshStandardMaterial({ 
+    color: 0xffffff, 
+    transparent: true, 
+    opacity: 0.3,
+    side: THREE.DoubleSide 
+});
+const leftNet = new THREE.Mesh(netGeometry, netMaterial);
+leftNet.position.set(-rinkWidth/2 + goalDepth/4, goalHeight/2, 0);
+leftGoalGroup.add(leftNet);
+
+scene.add(leftGoalGroup);
+
+// Right Goal (Player 2's goal to defend)
+const rightGoalGroup = new THREE.Group();
+
+// Right goal posts
+const rightGoalPost1 = new THREE.Mesh(goalPostGeometry, goalPostMaterial);
+rightGoalPost1.position.set(rinkWidth/2 - goalDepth/2, goalHeight/2, -goalWidth/2);
+rightGoalGroup.add(rightGoalPost1);
+
+const rightGoalPost2 = new THREE.Mesh(goalPostGeometry, goalPostMaterial);
+rightGoalPost2.position.set(rinkWidth/2 - goalDepth/2, goalHeight/2, goalWidth/2);
+rightGoalGroup.add(rightGoalPost2);
+
+// Right goal crossbar
+const rightCrossbar = new THREE.Mesh(crossbarGeometry, goalPostMaterial);
+rightCrossbar.position.set(rinkWidth/2 - goalDepth/2, goalHeight, 0);
+rightCrossbar.rotation.z = Math.PI / 2;
+rightGoalGroup.add(rightCrossbar);
+
+// Right goal net
+const rightNet = new THREE.Mesh(netGeometry, netMaterial);
+rightNet.position.set(rinkWidth/2 - goalDepth/4, goalHeight/2, 0);
+rightGoalGroup.add(rightNet);
+
+scene.add(rightGoalGroup);
+
 // Puck
 const puckGeometry = new THREE.CylinderGeometry(0.5, 0.5, 0.2, 32);
 const puckMaterial = new THREE.MeshStandardMaterial({ color: 0x111111 });
@@ -79,17 +254,227 @@ const puck = new THREE.Mesh(puckGeometry, puckMaterial);
 puck.position.y = 0.1;
 scene.add(puck);
 
+// Puck Physics
+const puckVelocity = { x: 0, z: 0 };
+const friction = 0.98;
+const bounceReduction = 0.8;
+
+// Game State
+let player1Score = 0;
+let player2Score = 0;
+let gameStartTime = Date.now();
+let gamePaused = false;
+
+// UI Elements
+const player1ScoreElement = document.getElementById('player1-score');
+const player2ScoreElement = document.getElementById('player2-score');
+const timerElement = document.getElementById('timer');
+
+// Player Paddles
+const paddleGeometry = new THREE.CylinderGeometry(1, 1, 0.3, 32);
+
+// Player 1 Paddle (Blue Team - Left Side)
+const paddle1Material = new THREE.MeshStandardMaterial({ color: 0x0066cc });
+const paddle1 = new THREE.Mesh(paddleGeometry, paddle1Material);
+paddle1.position.set(-10, 0.15, 0);
+scene.add(paddle1);
+
+// Player 2 Paddle (Red Team - Right Side)
+const paddle2Material = new THREE.MeshStandardMaterial({ color: 0xcc0000 });
+const paddle2 = new THREE.Mesh(paddleGeometry, paddle2Material);
+paddle2.position.set(10, 0.15, 0);
+scene.add(paddle2);
+
 // Camera Position (Overhead)
 camera.position.set(0, 18, 0);
 camera.lookAt(scene.position);
 
+// Player Controls
+const keys = {};
+const paddleSpeed = 0.3;
+
+// Track key states
+document.addEventListener('keydown', (event) => {
+    keys[event.code] = true;
+    
+    // Reset puck position with spacebar
+    if (event.code === 'Space') {
+        resetPuck();
+        event.preventDefault();
+    }
+});
+
+document.addEventListener('keyup', (event) => {
+    keys[event.code] = false;
+});
+
+// Update paddle positions based on input
+function updatePaddles() {
+    // Player 1 Controls (Arrow Keys) - Blue Paddle
+    if (keys['ArrowUp'] && paddle1.position.z > -rinkHeight/2 + 1) {
+        paddle1.position.z -= paddleSpeed;
+    }
+    if (keys['ArrowDown'] && paddle1.position.z < rinkHeight/2 - 1) {
+        paddle1.position.z += paddleSpeed;
+    }
+    if (keys['ArrowLeft'] && paddle1.position.x > -rinkWidth/2 + 1) {
+        paddle1.position.x -= paddleSpeed;
+    }
+    if (keys['ArrowRight'] && paddle1.position.x < rinkWidth/2 - 1) {
+        paddle1.position.x += paddleSpeed;
+    }
+    
+    // Player 2 Controls (WASD) - Red Paddle
+    if (keys['KeyW'] && paddle2.position.z > -rinkHeight/2 + 1) {
+        paddle2.position.z -= paddleSpeed;
+    }
+    if (keys['KeyS'] && paddle2.position.z < rinkHeight/2 - 1) {
+        paddle2.position.z += paddleSpeed;
+    }
+    if (keys['KeyA'] && paddle2.position.x > -rinkWidth/2 + 1) {
+        paddle2.position.x -= paddleSpeed;
+    }
+    if (keys['KeyD'] && paddle2.position.x < rinkWidth/2 - 1) {
+        paddle2.position.x += paddleSpeed;
+    }
+}
+
+// Reset puck to center
+function resetPuck() {
+    puck.position.set(0, 0.1, 0);
+    puckVelocity.x = 0;
+    puckVelocity.z = 0;
+}
+
+// Update UI elements
+function updateUI() {
+    player1ScoreElement.textContent = player1Score;
+    player2ScoreElement.textContent = player2Score;
+    
+    // Update timer
+    if (!gamePaused) {
+        const elapsed = Math.floor((Date.now() - gameStartTime) / 1000);
+        const minutes = Math.floor(elapsed / 60);
+        const seconds = elapsed % 60;
+        timerElement.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+    }
+}
+
+// Check if puck is in goal
+function checkGoal() {
+    const puckX = puck.position.x;
+    const puckZ = puck.position.z;
+    
+    // Check left goal (Player 2 scores)
+    if (puckX < -rinkWidth/2 + goalDepth && 
+        puckZ > -goalWidth/2 && 
+        puckZ < goalWidth/2) {
+        player2Score++;
+        console.log(`Player 2 scores! Score: Player 1: ${player1Score}, Player 2: ${player2Score}`);
+        updateUI();
+        resetPuck();
+        return true;
+    }
+    
+    // Check right goal (Player 1 scores)
+    if (puckX > rinkWidth/2 - goalDepth && 
+        puckZ > -goalWidth/2 && 
+        puckZ < goalWidth/2) {
+        player1Score++;
+        console.log(`Player 1 scores! Score: Player 1: ${player1Score}, Player 2: ${player2Score}`);
+        updateUI();
+        resetPuck();
+        return true;
+    }
+    
+    return false;
+}
+
+// Puck Physics Update
+function updatePuck() {
+    // Check for goals first
+    if (checkGoal()) {
+        return; // Exit early if goal was scored
+    }
+    
+    // Apply velocity to position
+    puck.position.x += puckVelocity.x;
+    puck.position.z += puckVelocity.z;
+    
+    // Apply friction
+    puckVelocity.x *= friction;
+    puckVelocity.z *= friction;
+    
+    // Stop very slow movement
+    if (Math.abs(puckVelocity.x) < 0.01) puckVelocity.x = 0;
+    if (Math.abs(puckVelocity.z) < 0.01) puckVelocity.z = 0;
+    
+    // Wall bouncing
+    const puckRadius = 0.5;
+    const wallBuffer = 0.2; // Extra buffer for the sideboards
+    
+    // Left and right walls (with goal openings)
+    if (puck.position.x <= -rinkWidth/2 + puckRadius + wallBuffer) {
+        // Check if puck is in goal area
+        if (puck.position.z < -goalWidth/2 || puck.position.z > goalWidth/2) {
+            puck.position.x = -rinkWidth/2 + puckRadius + wallBuffer;
+            puckVelocity.x = Math.abs(puckVelocity.x) * bounceReduction;
+        }
+    }
+    if (puck.position.x >= rinkWidth/2 - puckRadius - wallBuffer) {
+        // Check if puck is in goal area
+        if (puck.position.z < -goalWidth/2 || puck.position.z > goalWidth/2) {
+            puck.position.x = rinkWidth/2 - puckRadius - wallBuffer;
+            puckVelocity.x = -Math.abs(puckVelocity.x) * bounceReduction;
+        }
+    }
+    
+    // Top and bottom walls
+    if (puck.position.z <= -rinkHeight/2 + puckRadius + wallBuffer) {
+        puck.position.z = -rinkHeight/2 + puckRadius + wallBuffer;
+        puckVelocity.z = Math.abs(puckVelocity.z) * bounceReduction;
+    }
+    if (puck.position.z >= rinkHeight/2 - puckRadius - wallBuffer) {
+        puck.position.z = rinkHeight/2 - puckRadius - wallBuffer;
+        puckVelocity.z = -Math.abs(puckVelocity.z) * bounceReduction;
+    }
+    
+    // Basic paddle-puck collision detection
+    checkPaddleCollision(paddle1);
+    checkPaddleCollision(paddle2);
+}
+
+// Check collision between puck and paddle
+function checkPaddleCollision(paddle) {
+    const distance = puck.position.distanceTo(paddle.position);
+    const collisionDistance = 1.5; // Combined radius of puck and paddle
+    
+    if (distance < collisionDistance) {
+        // Calculate collision direction
+        const direction = new THREE.Vector3();
+        direction.subVectors(puck.position, paddle.position).normalize();
+        
+        // Add some velocity to the puck based on collision
+        const hitStrength = 0.4;
+        puckVelocity.x += direction.x * hitStrength;
+        puckVelocity.z += direction.z * hitStrength;
+        
+        // Separate puck from paddle to prevent sticking
+        puck.position.copy(paddle.position).add(direction.multiplyScalar(collisionDistance));
+    }
+}
+
 // Game Loop
 function animate() {
     requestAnimationFrame(animate);
+    updatePaddles();
+    updatePuck();
+    updateUI();
     renderer.render(scene, camera);
 }
 
-// We don't call animate() here anymore, the LoadingManager does.
+// Start the animation loop
+animate();
 
 // Handle window resizing
 window.addEventListener('resize', () => {
