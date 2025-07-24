@@ -1,9 +1,20 @@
-# Rink Texture and Display Issues
+# 3D Hockey Game Development
 
-This document outlines the steps taken to create a 3D hockey rink and the unresolved issues with texture rendering.
+This document outlines the development of a complete 3D hockey game, starting with fixing the rink texture issue and expanding into a fully playable game.
 
-## Goal
-The primary goal was to create a 3D representation of an NHL hockey rink with all the correct markings (center circle, blue lines, red line, goal lines, etc.) and sideboards.
+## Goals
+1. **Immediate**: Fix the rink texture rendering to show proper NHL markings
+2. **Core Gameplay**: Create a fun, playable hockey game with:
+   - Player-controlled paddles with team colors
+   - Realistic puck physics (sliding, friction, bouncing)
+   - Responsive keyboard controls
+   - Collision detection between puck and paddles
+   - Goals with nets at each end
+   - Score tracking and game state
+3. **Enhanced Features**:
+   - Sound effects for immersion
+   - AI opponent for single-player mode
+   - Visual effects like ice spray particles
 
 ## Steps Taken
 
@@ -38,4 +49,25 @@ The primary goal was to create a 3D representation of an NHL hockey rink with al
     *   **Issue:** While the overall scene is brighter, the fundamental problem of the texture not rendering remains.
 
 ## Current Status
-We have a scene with an overhead view of a white plane representing the rink, surrounded by white sideboards, and a puck. The core issue is that the texture image with the rink markings is not being applied to the rink plane, despite multiple attempts with different textures and loading strategies.
+We have a scene with an overhead view of a white plane representing the rink, surrounded by white sideboards, and a puck. The texture with rink markings isn't rendering despite multiple attempts.
+
+## Development Plan
+
+### Phase 1: Fix Foundation (Priority: High)
+1. **Fix rink texture issue** - Try programmatic approach if external textures continue to fail
+2. **Add player paddles** - Two paddles with distinct team colors (red vs blue)
+3. **Implement basic controls** - Arrow keys for player 1, WASD for player 2
+
+### Phase 2: Core Gameplay (Priority: High)
+4. **Add puck physics** - Implement sliding with friction and wall bouncing
+5. **Create goals** - Add goal structures with nets at each end
+6. **Collision detection** - Handle puck-paddle and puck-goal interactions
+7. **Game state & scoring** - Track score, handle goals, game timer
+
+### Phase 3: Polish (Priority: Medium-Low)
+8. **Sound effects** - Puck hits, goal horn, crowd cheers
+9. **AI opponent** - Basic AI for single-player mode
+10. **Visual effects** - Ice spray particles, better lighting, shadows
+
+## Next Steps
+Begin with fixing the texture issue using a programmatic approach to draw the rink markings directly.
