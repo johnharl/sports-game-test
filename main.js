@@ -328,6 +328,37 @@ let gameStartTime = Date.now();
 let gamePaused = false;
 let isSinglePlayer = false; // Default to two-player mode
 
+// Game Progression State
+const gameState = {
+    currentPeriod: 1,
+    maxPeriods: 3,
+    periodDuration: 3 * 60 * 1000, // 3 minutes in milliseconds
+    periodTimeLeft: 3 * 60 * 1000, // Time remaining in current period
+    intermissionDuration: 15 * 1000, // 15 seconds intermission
+    intermissionTimeLeft: 0,
+    gamePhase: 'playing', // 'playing', 'intermission', 'game_over', 'victory', 'defeat'
+    currentLevel: 1,
+    maxLevel: 3,
+    periodStartTime: Date.now(),
+    intermissionStartTime: 0,
+    levelProgress: loadLevelProgress()
+};
+
+// Load level progress from localStorage
+function loadLevelProgress() {
+    const saved = localStorage.getItem('hockey_game_level');
+    return saved ? parseInt(saved) : 1;
+}
+
+// Save level progress to localStorage
+function saveLevelProgress(level) {
+    localStorage.setItem('hockey_game_level', level.toString());
+    gameState.levelProgress = level;
+}
+
+// Initialize game state based on saved progress
+gameState.currentLevel = gameState.levelProgress;
+
 // Sound System
 const audioContext = new (window.AudioContext || window.webkitAudioContext)();
 
@@ -395,6 +426,10 @@ const player1ScoreElement = document.getElementById('player1-score');
 const player2ScoreElement = document.getElementById('player2-score');
 const timerElement = document.getElementById('timer');
 const gameModeElement = document.getElementById('game-mode');
+const gameOverlay = document.getElementById('game-overlay');
+const overlayTitle = document.getElementById('overlay-title');
+const overlayMessage = document.getElementById('overlay-message');
+const overlayControls = document.getElementById('overlay-controls');
 
 // Player Paddles
 const paddleGeometry = new THREE.CylinderGeometry(1, 1, 0.3, 32);
@@ -491,22 +526,47 @@ const paddleSpeed = 0.3;
 document.addEventListener('keydown', (event) => {
     keys[event.code] = true;
     
-    // Reset puck position with spacebar
-    if (event.code === 'Space') {
+    // Reset puck position with spacebar (only during active play)
+    if (event.code === 'Space' && gameState.gamePhase === 'playing') {
         resetPuck();
         event.preventDefault();
     }
     
-    // Switch game modes
+    // Game control keys
+    if (event.code === 'KeyR') {
+        // Restart current level
+        restartLevel();
+        event.preventDefault();
+    }
+    
+    if (event.code === 'KeyN') {
+        // Start new game from Level 1
+        startNewGame();
+        event.preventDefault();
+    }
+    
+    // Switch game modes (only when not in single player progression)
     if (event.code === 'Digit1') {
         isSinglePlayer = true;
-        gameModeElement.textContent = 'Single Player (vs AI)';
-        console.log('Switched to Single Player mode');
+        // If switching to single player, ensure we're at the correct level
+        gameState.currentLevel = gameState.levelProgress;
+        console.log(`Switched to Single Player mode - Level ${gameState.currentLevel}`);
     }
     if (event.code === 'Digit2') {
         isSinglePlayer = false;
-        gameModeElement.textContent = 'Two Player';
         console.log('Switched to Two Player mode');
+    }
+    
+    // Continue to next level after victory (only in victory state)
+    if (event.code === 'Enter' && gameState.gamePhase === 'victory') {
+        restartLevel(); // Start the new level
+        event.preventDefault();
+    }
+    
+    // Retry after defeat
+    if (event.code === 'Enter' && gameState.gamePhase === 'defeat') {
+        restartLevel(); // Retry current level
+        event.preventDefault();
     }
 });
 
@@ -514,46 +574,101 @@ document.addEventListener('keyup', (event) => {
     keys[event.code] = false;
 });
 
-// AI opponent logic
+// AI opponent logic with difficulty scaling
 function updateAI() {
     // AI controls the red paddle (paddle2)
-    const aiSpeed = paddleSpeed * 0.85; // Slightly slower than human player
+    // Difficulty scaling based on current level
+    let aiSpeedMultiplier, aggressiveness, reactionTime;
+    
+    switch(gameState.currentLevel) {
+        case 1: // Level 1: Basic AI (60% speed, defensive)
+            aiSpeedMultiplier = 0.6;
+            aggressiveness = 0.1; // Very defensive
+            reactionTime = 0.8; // Slower reactions
+            break;
+        case 2: // Level 2: Intermediate AI (80% speed, balanced)
+            aiSpeedMultiplier = 0.8;
+            aggressiveness = 0.4; // Balanced play
+            reactionTime = 0.6; // Moderate reactions
+            break;
+        case 3: // Level 3: Expert AI (100% speed, aggressive)
+            aiSpeedMultiplier = 1.0;
+            aggressiveness = 0.8; // Very aggressive
+            reactionTime = 0.3; // Fast reactions
+            break;
+        default:
+            aiSpeedMultiplier = 0.6;
+            aggressiveness = 0.1;
+            reactionTime = 0.8;
+    }
+    
+    const aiSpeed = paddleSpeed * aiSpeedMultiplier;
     const puckPosition = puck.position;
     const paddlePosition = paddle2.position;
     
-    // AI strategy based on puck position
+    // AI strategy based on puck position and difficulty level
     if (puckPosition.x > 0) {
-        // Puck is on AI's side - defend
+        // Puck is on AI's side - defend (but with varying aggression)
         const targetZ = puckPosition.z;
-        const targetX = Math.max(puckPosition.x - 2, rinkWidth/2 - 4);
+        let targetX;
+        
+        if (gameState.currentLevel === 1) {
+            // Level 1: Stay back, very defensive
+            targetX = Math.max(puckPosition.x - 3, rinkWidth/2 - 5);
+        } else if (gameState.currentLevel === 2) {
+            // Level 2: Moderate positioning
+            targetX = Math.max(puckPosition.x - 2, rinkWidth/2 - 4);
+        } else {
+            // Level 3: Aggressive positioning, try to intercept
+            targetX = Math.max(puckPosition.x - 1, rinkWidth/2 - 3);
+        }
+        
+        // Apply reaction time delay for lower levels
+        const tolerance = reactionTime;
         
         // Move towards defensive position
-        if (paddlePosition.z < targetZ - 0.5 && paddlePosition.z < rinkHeight/2 - 1) {
+        if (paddlePosition.z < targetZ - tolerance && paddlePosition.z < rinkHeight/2 - 1) {
             paddle2.position.z += aiSpeed;
-        } else if (paddlePosition.z > targetZ + 0.5 && paddlePosition.z > -rinkHeight/2 + 1) {
+        } else if (paddlePosition.z > targetZ + tolerance && paddlePosition.z > -rinkHeight/2 + 1) {
             paddle2.position.z -= aiSpeed;
         }
         
-        if (paddlePosition.x < targetX - 0.5 && paddlePosition.x < rinkWidth/2 - 1) {
+        if (paddlePosition.x < targetX - tolerance && paddlePosition.x < rinkWidth/2 - 1) {
             paddle2.position.x += aiSpeed;
-        } else if (paddlePosition.x > targetX + 0.5 && paddlePosition.x > -rinkWidth/2 + 1) {
+        } else if (paddlePosition.x > targetX + tolerance && paddlePosition.x > -rinkWidth/2 + 1) {
             paddle2.position.x -= aiSpeed;
         }
     } else {
-        // Puck is on opponent's side - move to center position
-        const centerX = 10;
-        const centerZ = 0;
+        // Puck is on opponent's side - positioning based on aggressiveness
+        let centerX, centerZ;
         
-        if (paddlePosition.z < centerZ - 0.5 && paddlePosition.z < rinkHeight/2 - 1) {
-            paddle2.position.z += aiSpeed * 0.5;
-        } else if (paddlePosition.z > centerZ + 0.5 && paddlePosition.z > -rinkHeight/2 + 1) {
-            paddle2.position.z -= aiSpeed * 0.5;
+        if (gameState.currentLevel === 1) {
+            // Level 1: Stay in defensive position
+            centerX = 12;
+            centerZ = 0;
+        } else if (gameState.currentLevel === 2) {
+            // Level 2: Move towards center, occasionally offensive
+            centerX = 8;
+            centerZ = puckPosition.z * 0.3; // Slight anticipation
+        } else {
+            // Level 3: Aggressive offensive positioning
+            centerX = 5;
+            centerZ = puckPosition.z * 0.6; // Strong anticipation
         }
         
-        if (paddlePosition.x < centerX - 0.5 && paddlePosition.x < rinkWidth/2 - 1) {
-            paddle2.position.x += aiSpeed * 0.5;
-        } else if (paddlePosition.x > centerX + 0.5 && paddlePosition.x > 10) {
-            paddle2.position.x -= aiSpeed * 0.5;
+        const moveSpeed = aiSpeed * (0.3 + aggressiveness * 0.7);
+        const tolerance = reactionTime * 0.5;
+        
+        if (paddlePosition.z < centerZ - tolerance && paddlePosition.z < rinkHeight/2 - 1) {
+            paddle2.position.z += moveSpeed;
+        } else if (paddlePosition.z > centerZ + tolerance && paddlePosition.z > -rinkHeight/2 + 1) {
+            paddle2.position.z -= moveSpeed;
+        }
+        
+        if (paddlePosition.x < centerX - tolerance && paddlePosition.x < rinkWidth/2 - 1) {
+            paddle2.position.x += moveSpeed;
+        } else if (paddlePosition.x > centerX + tolerance && paddlePosition.x > -rinkWidth/2 + 1) {
+            paddle2.position.x -= moveSpeed;
         }
     }
 }
@@ -601,17 +716,191 @@ function resetPuck() {
     puckVelocity.z = 0;
 }
 
+// Game Period Management
+function updateGameTimer() {
+    const currentTime = Date.now();
+    
+    if (gameState.gamePhase === 'playing') {
+        // Update period timer
+        const elapsed = currentTime - gameState.periodStartTime;
+        gameState.periodTimeLeft = Math.max(0, gameState.periodDuration - elapsed);
+        
+        // Check if period is over
+        if (gameState.periodTimeLeft <= 0) {
+            endPeriod();
+        }
+    } else if (gameState.gamePhase === 'intermission') {
+        // Update intermission timer
+        const elapsed = currentTime - gameState.intermissionStartTime;
+        gameState.intermissionTimeLeft = Math.max(0, gameState.intermissionDuration - elapsed);
+        
+        // Check if intermission is over
+        if (gameState.intermissionTimeLeft <= 0) {
+            startNextPeriod();
+        }
+    }
+}
+
+function endPeriod() {
+    console.log(`Period ${gameState.currentPeriod} ended. Score: Player 1: ${player1Score}, Player 2: ${player2Score}`);
+    
+    if (gameState.currentPeriod >= gameState.maxPeriods) {
+        // Game is over - determine winner
+        endGame();
+        return;
+    }
+    
+    // Start intermission
+    gameState.gamePhase = 'intermission';
+    gameState.intermissionStartTime = Date.now();
+    gameState.intermissionTimeLeft = gameState.intermissionDuration;
+    
+    // Reset puck during intermission
+    resetPuck();
+}
+
+function startNextPeriod() {
+    gameState.currentPeriod++;
+    gameState.gamePhase = 'playing';
+    gameState.periodStartTime = Date.now();
+    gameState.periodTimeLeft = gameState.periodDuration;
+    
+    console.log(`Starting Period ${gameState.currentPeriod}`);
+    resetPuck();
+}
+
+function endGame() {
+    gameState.gamePhase = 'game_over';
+    
+    // Determine winner and handle level progression
+    if (player1Score > player2Score) {
+        // Player wins - advance to next level
+        if (gameState.currentLevel < gameState.maxLevel) {
+            gameState.gamePhase = 'victory';
+            gameState.currentLevel++;
+            saveLevelProgress(gameState.currentLevel);
+            console.log(`Victory! Advanced to Level ${gameState.currentLevel}`);
+            showVictoryScreen(gameState.currentLevel - 1, gameState.currentLevel);
+        } else {
+            // Beat final level
+            gameState.gamePhase = 'victory';
+            console.log('Congratulations! You beat all levels!');
+            showCompleteScreen();
+        }
+    } else if (player2Score > player1Score) {
+        // AI wins - player must retry current level
+        gameState.gamePhase = 'defeat';
+        console.log(`Defeat! Try Level ${gameState.currentLevel} again.`);
+        showDefeatScreen(gameState.currentLevel);
+    } else {
+        // Tie game - also counts as defeat (must win to advance)
+        gameState.gamePhase = 'defeat';
+        console.log(`Tie game! You must win to advance from Level ${gameState.currentLevel}.`);
+        showDefeatScreen(gameState.currentLevel, true);
+    }
+}
+
+// Overlay management functions
+function hideOverlay() {
+    gameOverlay.style.display = 'none';
+}
+
+function showVictoryScreen(completedLevel, nextLevel) {
+    overlayTitle.textContent = 'VICTORY!';
+    overlayTitle.className = 'victory-title';
+    overlayMessage.innerHTML = `🏆 You beat Level ${completedLevel}!<br><br>Score: Blue ${player1Score} - ${player2Score} Red<br><br>Ready for Level ${nextLevel}?`;
+    overlayControls.innerHTML = 'Press ENTER to continue to next level<br>Press R to replay current level<br>Press N for new game';
+    gameOverlay.style.display = 'flex';
+}
+
+function showDefeatScreen(currentLevel, wasTie = false) {
+    overlayTitle.textContent = 'DEFEAT!';
+    overlayTitle.className = 'defeat-title';
+    const tieText = wasTie ? 'TIE GAME! ' : '';
+    overlayMessage.innerHTML = `${tieText}💀 Level ${currentLevel} Failed<br><br>Score: Blue ${player1Score} - ${player2Score} Red<br><br>You must win to advance!`;
+    overlayControls.innerHTML = 'Press ENTER to retry level<br>Press R to restart level<br>Press N for new game';
+    gameOverlay.style.display = 'flex';
+}
+
+function showCompleteScreen() {
+    overlayTitle.textContent = 'CHAMPION!';
+    overlayTitle.className = 'complete-title';
+    overlayMessage.innerHTML = `🏆🎉 ALL LEVELS COMPLETE! 🎉🏆<br><br>Final Score: Blue ${player1Score} - ${player2Score} Red<br><br>You are the Hockey Master!`;
+    overlayControls.innerHTML = 'Press R to replay Level 3<br>Press N to start over from Level 1';
+    gameOverlay.style.display = 'flex';
+}
+
+function startNewGame() {
+    // Hide overlay
+    hideOverlay();
+    
+    // Reset to Level 1
+    gameState.currentLevel = 1;
+    gameState.currentPeriod = 1;
+    gameState.gamePhase = 'playing';
+    gameState.periodStartTime = Date.now();
+    gameState.periodTimeLeft = gameState.periodDuration;
+    
+    // Reset scores
+    player1Score = 0;
+    player2Score = 0;
+    
+    // Reset level progress
+    saveLevelProgress(1);
+    
+    console.log('Starting new game from Level 1');
+    resetPuck();
+}
+
+function restartLevel() {
+    // Hide overlay
+    hideOverlay();
+    
+    // Restart current level
+    gameState.currentPeriod = 1;
+    gameState.gamePhase = 'playing';
+    gameState.periodStartTime = Date.now();
+    gameState.periodTimeLeft = gameState.periodDuration;
+    
+    // Reset scores
+    player1Score = 0;
+    player2Score = 0;
+    
+    console.log(`Restarting Level ${gameState.currentLevel}`);
+    resetPuck();
+}
+
 // Update UI elements
 function updateUI() {
     player1ScoreElement.textContent = player1Score;
     player2ScoreElement.textContent = player2Score;
     
-    // Update timer
-    if (!gamePaused) {
-        const elapsed = Math.floor((Date.now() - gameStartTime) / 1000);
-        const minutes = Math.floor(elapsed / 60);
-        const seconds = elapsed % 60;
-        timerElement.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+    // Update timer based on game phase
+    if (gameState.gamePhase === 'playing') {
+        const timeLeft = Math.ceil(gameState.periodTimeLeft / 1000);
+        const minutes = Math.floor(timeLeft / 60);
+        const seconds = timeLeft % 60;
+        timerElement.textContent = `Period ${gameState.currentPeriod}/3 - ${minutes}:${seconds.toString().padStart(2, '0')}`;
+    } else if (gameState.gamePhase === 'intermission') {
+        const timeLeft = Math.ceil(gameState.intermissionTimeLeft / 1000);
+        timerElement.textContent = `Intermission - ${timeLeft}s`;
+    } else if (gameState.gamePhase === 'victory') {
+        if (gameState.currentLevel > gameState.maxLevel) {
+            timerElement.textContent = 'ALL LEVELS COMPLETE!';
+        } else {
+            timerElement.textContent = `VICTORY! Now Level ${gameState.currentLevel}`;
+        }
+    } else if (gameState.gamePhase === 'defeat') {
+        timerElement.textContent = 'DEFEAT - Try Again!';
+    } else {
+        timerElement.textContent = 'Game Over';
+    }
+    
+    // Update game mode to show current level
+    if (isSinglePlayer) {
+        gameModeElement.textContent = `Single Player - Level ${gameState.currentLevel}/3`;
+    } else {
+        gameModeElement.textContent = 'Two Player';
     }
 }
 
@@ -745,26 +1034,32 @@ function animate() {
     const deltaTime = (currentTime - lastTime) / 1000; // Convert to seconds
     lastTime = currentTime;
     
-    updatePaddles();
-    updatePuck();
+    // Update game timer and period management
+    updateGameTimer();
+    
+    // Only update game elements if actively playing
+    if (gameState.gamePhase === 'playing') {
+        updatePaddles();
+        updatePuck();
+        
+        // Check for ice spray from paddle movement
+        const paddle1Movement = paddle1.position.clone().sub(paddle1PrevPos);
+        const paddle1Speed = paddle1Movement.length();
+        if (paddle1Speed > 0.01) {
+            emitIceSpray(paddle1.position, paddle1Movement.normalize(), paddle1Speed);
+        }
+        paddle1PrevPos = paddle1.position.clone();
+        
+        const paddle2Movement = paddle2.position.clone().sub(paddle2PrevPos);
+        const paddle2Speed = paddle2Movement.length();
+        if (paddle2Speed > 0.01) {
+            emitIceSpray(paddle2.position, paddle2Movement.normalize(), paddle2Speed);
+        }
+        paddle2PrevPos = paddle2.position.clone();
+    }
+    
+    // Always update UI and particles
     updateUI();
-    
-    // Check for ice spray from paddle movement
-    const paddle1Movement = paddle1.position.clone().sub(paddle1PrevPos);
-    const paddle1Speed = paddle1Movement.length();
-    if (paddle1Speed > 0.01) {
-        emitIceSpray(paddle1.position, paddle1Movement.normalize(), paddle1Speed);
-    }
-    paddle1PrevPos = paddle1.position.clone();
-    
-    const paddle2Movement = paddle2.position.clone().sub(paddle2PrevPos);
-    const paddle2Speed = paddle2Movement.length();
-    if (paddle2Speed > 0.01) {
-        emitIceSpray(paddle2.position, paddle2Movement.normalize(), paddle2Speed);
-    }
-    paddle2PrevPos = paddle2.position.clone();
-    
-    // Update particle system
     updateParticles(deltaTime);
     
     renderer.render(scene, camera);
