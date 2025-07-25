@@ -676,17 +676,18 @@ function updateAI() {
 // Update paddle positions based on input
 function updatePaddles() {
     // Player 1 Controls (Arrow Keys) - Blue Paddle
+    const player1Speed = paddleSpeed * 0.9; // 90% speed for player
     if (keys['ArrowUp'] && paddle1.position.z > -rinkHeight/2 + 1) {
-        paddle1.position.z -= paddleSpeed;
+        paddle1.position.z -= player1Speed;
     }
     if (keys['ArrowDown'] && paddle1.position.z < rinkHeight/2 - 1) {
-        paddle1.position.z += paddleSpeed;
+        paddle1.position.z += player1Speed;
     }
     if (keys['ArrowLeft'] && paddle1.position.x > -rinkWidth/2 + 1) {
-        paddle1.position.x -= paddleSpeed;
+        paddle1.position.x -= player1Speed;
     }
     if (keys['ArrowRight'] && paddle1.position.x < rinkWidth/2 - 1) {
-        paddle1.position.x += paddleSpeed;
+        paddle1.position.x += player1Speed;
     }
     
     // Player 2 Controls - either human (WASD) or AI
