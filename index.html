@@ -26,6 +26,52 @@
             text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
             z-index: 100;
         }
+        #game-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.8);
+            display: none;
+            z-index: 200;
+            align-items: center;
+            justify-content: center;
+        }
+        #overlay-content {
+            background: rgba(0,0,0,0.9);
+            padding: 40px;
+            border-radius: 10px;
+            border: 3px solid #fff;
+            text-align: center;
+            color: white;
+            font-size: 24px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+            max-width: 500px;
+        }
+        #overlay-title {
+            font-size: 48px;
+            font-weight: bold;
+            margin-bottom: 20px;
+        }
+        #overlay-message {
+            font-size: 20px;
+            margin-bottom: 30px;
+            line-height: 1.5;
+        }
+        #overlay-controls {
+            font-size: 16px;
+            color: #ccc;
+        }
+        .victory-title {
+            color: #00ff00;
+        }
+        .defeat-title {
+            color: #ff0000;
+        }
+        .complete-title {
+            color: #ffd700;
+        }
     </style>
 </head>
 <body>
@@ -38,7 +84,16 @@
     
     <div id="instructions">
         <div>Player 1 (Blue): Arrow Keys | Player 2 (Red): WASD</div>
-        <div>Press SPACEBAR to reset puck | Press 1 for Single Player | Press 2 for Two Player</div>
+        <div>SPACEBAR: Reset puck | 1: Single Player | 2: Two Player</div>
+        <div>R: Restart level | N: New game | ENTER: Continue/Retry after game ends</div>
+    </div>
+    
+    <div id="game-overlay">
+        <div id="overlay-content">
+            <div id="overlay-title">VICTORY!</div>
+            <div id="overlay-message">You beat Level 1!<br>Ready for Level 2?</div>
+            <div id="overlay-controls">Press ENTER to continue<br>Press R to restart<br>Press N for new game</div>
+        </div>
     </div>
     
     <script type="importmap">
