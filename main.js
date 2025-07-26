@@ -362,6 +362,16 @@ gameState.currentLevel = gameState.levelProgress;
 // Sound System
 const audioContext = new (window.AudioContext || window.webkitAudioContext)();
 
+// Goal Celebration State
+const celebrationState = {
+    isActive: false,
+    startTime: 0,
+    duration: 3000, // 3 seconds
+    team: null, // 'blue' or 'red'
+    originalLightIntensity: { ambient: 1.2, directional: 0.8 },
+    strobeInterval: null
+};
+
 // Create sound effects using Web Audio API
 function createHitSound() {
     const oscillator = audioContext.createOscillator();
@@ -402,6 +412,199 @@ function createGoalSound() {
     oscillator2.start(audioContext.currentTime);
     oscillator1.stop(audioContext.currentTime + 0.8);
     oscillator2.stop(audioContext.currentTime + 0.8);
+}
+
+// Commentator Voice System
+function playCommentatorVoice(team) {
+    // Check if Speech Synthesis is supported
+    if ('speechSynthesis' in window) {
+        const utterance = new SpeechSynthesisUtterance();
+        
+        // Randomize excitement level and phrases
+        const phrases = [
+            `And they shoot... AND THEY SCORE! ${team} team finds the back of the net!`,
+            `GOAL! What a shot by ${team} team! The crowd goes wild!`,
+            `He shoots, he scores! Fantastic goal by ${team} team!`,
+            `AND THAT'S A GOAL! ${team} team lights the lamp!`,
+            `GOOOOOAL! ${team} team with a beautiful finish!`
+        ];
+        
+        utterance.text = phrases[Math.floor(Math.random() * phrases.length)];
+        utterance.rate = 1.2; // Slightly faster for excitement
+        utterance.pitch = 1.1; // Higher pitch for excitement
+        utterance.volume = 0.8;
+        
+        // Try to find an appropriate voice
+        const voices = speechSynthesis.getVoices();
+        const preferredVoice = voices.find(voice => 
+            voice.name.includes('English') || voice.lang.includes('en')
+        );
+        if (preferredVoice) {
+            utterance.voice = preferredVoice;
+        }
+        
+        // Delay slightly so it doesn't overlap with goal horn
+        setTimeout(() => {
+            speechSynthesis.speak(utterance);
+        }, 800);
+    }
+}
+
+// Dynamic Lighting System for Goal Celebrations
+function startGoalCelebration(team) {
+    celebrationState.isActive = true;
+    celebrationState.startTime = Date.now();
+    celebrationState.team = team;
+    
+    // Store original light intensities
+    celebrationState.originalLightIntensity.ambient = ambientLight.intensity;
+    celebrationState.originalLightIntensity.directional = directionalLight.intensity;
+    
+    // Set team colors for lighting
+    const teamColors = {
+        blue: new THREE.Color(0x0066ff),
+        red: new THREE.Color(0xff0066)
+    };
+    
+    // Start strobe effect
+    let strobePhase = 0;
+    celebrationState.strobeInterval = setInterval(() => {
+        strobePhase = (strobePhase + 1) % 4;
+        
+        if (strobePhase === 0 || strobePhase === 2) {
+            // Bright team-colored flash
+            ambientLight.color = teamColors[team];
+            directionalLight.color = teamColors[team];
+            ambientLight.intensity = 2.0;
+            directionalLight.intensity = 1.5;
+        } else {
+            // Dim phase
+            ambientLight.color = new THREE.Color(0xffffff);
+            directionalLight.color = new THREE.Color(0xffffff);
+            ambientLight.intensity = 0.3;
+            directionalLight.intensity = 0.2;
+        }
+    }, 150); // Strobe every 150ms
+    
+    // Start screen border flash
+    startScreenBorderFlash(team);
+    
+    // Enhanced celebration particles
+    emitCelebrationParticles(team);
+    
+    // Auto-end celebration after duration
+    setTimeout(() => {
+        endGoalCelebration();
+    }, celebrationState.duration);
+}
+
+function endGoalCelebration() {
+    if (!celebrationState.isActive) return;
+    
+    celebrationState.isActive = false;
+    
+    // Clear strobe interval
+    if (celebrationState.strobeInterval) {
+        clearInterval(celebrationState.strobeInterval);
+        celebrationState.strobeInterval = null;
+    }
+    
+    // Restore original lighting
+    ambientLight.color = new THREE.Color(0xffffff);
+    directionalLight.color = new THREE.Color(0xffffff);
+    ambientLight.intensity = celebrationState.originalLightIntensity.ambient;
+    directionalLight.intensity = celebrationState.originalLightIntensity.directional;
+    
+    // End screen border flash
+    endScreenBorderFlash();
+}
+
+// Screen Border Flash System
+function startScreenBorderFlash(team) {
+    const borderElement = document.createElement('div');
+    borderElement.id = 'goal-border-flash';
+    borderElement.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        pointer-events: none;
+        z-index: 500;
+        border: 8px solid ${team === 'blue' ? '#0066ff' : '#ff0066'};
+        background: transparent;
+        opacity: 0;
+        animation: goalBorderFlash 3s ease-out;
+    `;
+    
+    // Add CSS animation keyframes if not already present
+    if (!document.getElementById('goal-celebration-styles')) {
+        const style = document.createElement('style');
+        style.id = 'goal-celebration-styles';
+        style.textContent = `
+            @keyframes goalBorderFlash {
+                0% { opacity: 0; border-width: 8px; }
+                10% { opacity: 1; border-width: 12px; }
+                20% { opacity: 0.7; border-width: 8px; }
+                30% { opacity: 1; border-width: 12px; }
+                40% { opacity: 0.7; border-width: 8px; }
+                50% { opacity: 1; border-width: 12px; }
+                60% { opacity: 0.7; border-width: 8px; }
+                70% { opacity: 0.5; border-width: 6px; }
+                80% { opacity: 0.3; border-width: 4px; }
+                90% { opacity: 0.1; border-width: 2px; }
+                100% { opacity: 0; border-width: 0px; }
+            }
+        `;
+        document.head.appendChild(style);
+    }
+    
+    document.body.appendChild(borderElement);
+}
+
+function endScreenBorderFlash() {
+    const borderElement = document.getElementById('goal-border-flash');
+    if (borderElement) {
+        borderElement.remove();
+    }
+}
+
+// Enhanced Celebration Particle System
+function emitCelebrationParticles(team) {
+    const teamColors = {
+        blue: 0x0066ff,
+        red: 0xff0066
+    };
+    
+    const particlesToEmit = 30; // More particles for celebration
+    const emissionCenter = new THREE.Vector3(0, 1, 0); // Center of rink, elevated
+    
+    for (let i = 0; i < particlesToEmit; i++) {
+        const particle = particles.find(p => p.life <= 0);
+        if (particle) {
+            // Position particles in a burst pattern
+            const angle = (i / particlesToEmit) * Math.PI * 2;
+            const radius = Math.random() * 3;
+            
+            particle.mesh.position.set(
+                emissionCenter.x + Math.cos(angle) * radius,
+                emissionCenter.y + Math.random() * 2,
+                emissionCenter.z + Math.sin(angle) * radius
+            );
+            
+            particle.mesh.visible = true;
+            particle.mesh.material.color.setHex(teamColors[team]);
+            
+            // Explosive velocity pattern
+            particle.velocity.set(
+                Math.cos(angle) * (0.2 + Math.random() * 0.3),
+                0.3 + Math.random() * 0.5, // Upward explosion
+                Math.sin(angle) * (0.2 + Math.random() * 0.3)
+            );
+            
+            particle.life = 2.0 + Math.random() * 1.0; // Longer life for celebration
+        }
+    }
 }
 
 function createWallBounceSound() {
@@ -526,8 +729,15 @@ const paddleSpeed = 0.3;
 document.addEventListener('keydown', (event) => {
     keys[event.code] = true;
     
-    // Reset puck position with spacebar (only during active play)
-    if (event.code === 'Space' && gameState.gamePhase === 'playing') {
+    // Skip goal celebration with ESC key
+    if (event.code === 'Escape' && celebrationState.isActive) {
+        endGoalCelebration();
+        event.preventDefault();
+        return;
+    }
+    
+    // Reset puck position with spacebar (only during active play and not during celebration)
+    if (event.code === 'Space' && gameState.gamePhase === 'playing' && !celebrationState.isActive) {
         resetPuck();
         event.preventDefault();
     }
@@ -916,7 +1126,12 @@ function checkGoal() {
         puckZ < goalWidth/2) {
         player2Score++;
         console.log(`Player 2 scores! Score: Player 1: ${player1Score}, Player 2: ${player2Score}`);
-        createGoalSound(); // Play goal sound
+        
+        // Full goal celebration for Red team
+        createGoalSound(); // Original goal horn
+        playCommentatorVoice('Red'); // New commentator voice
+        startGoalCelebration('red'); // New lighting and visual effects
+        
         updateUI();
         resetPuck();
         return true;
@@ -928,7 +1143,12 @@ function checkGoal() {
         puckZ < goalWidth/2) {
         player1Score++;
         console.log(`Player 1 scores! Score: Player 1: ${player1Score}, Player 2: ${player2Score}`);
-        createGoalSound(); // Play goal sound
+        
+        // Full goal celebration for Blue team
+        createGoalSound(); // Original goal horn
+        playCommentatorVoice('Blue'); // New commentator voice
+        startGoalCelebration('blue'); // New lighting and visual effects
+        
         updateUI();
         resetPuck();
         return true;
