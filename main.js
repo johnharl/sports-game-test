@@ -1159,8 +1159,8 @@ function checkGoal() {
 
 // Puck Physics Update
 function updatePuck() {
-    // Check for goals first
-    if (checkGoal()) {
+    // Check for goals first (but not during celebrations)
+    if (!celebrationState.isActive && checkGoal()) {
         return; // Exit early if goal was scored
     }
     
@@ -1258,8 +1258,8 @@ function animate() {
     // Update game timer and period management
     updateGameTimer();
     
-    // Only update game elements if actively playing
-    if (gameState.gamePhase === 'playing') {
+    // Only update game elements if actively playing and not celebrating
+    if (gameState.gamePhase === 'playing' && !celebrationState.isActive) {
         updatePaddles();
         updatePuck();
         
